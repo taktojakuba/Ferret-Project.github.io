@@ -1,78 +1,166 @@
-/* ============================================================
-   ZODIUM — main.js  (home page only)
-   ============================================================ */
+const REPOS = {
+pkgs:  { releaseBase: 'https://github.com/zodium-project/pkgs-zodium/releases/download/pkgs-rpm/' },
+kmods: { releaseBase: null },
+};
 
-document.addEventListener('DOMContentLoaded', () => {
-  initStars();
-  runTypedAnimation();
+let activeRepo = 'pkgs';
+const cache = {};
+
+const $ = id => document.getElementById(id);
+
+function switchRepo(repo) {
+activeRepo = repo;
+
+const search = $('search-input');
+
+document.querySelectorAll('#nav-pkgs, #nav-kmods').forEach(t => t.classList.remove('active-nav'));
+const navItem = document.getElementById('nav-' + repo);
+if (navItem) navItem.classList.add('active-nav');
+if (search) search.value = ''; // Check if search exists before setting value
+
+loadRepo(repo);
+}
+
+// ── Load & parse repodata ────────────────────────────────
+async function loadRepo(repo) {
+const list = $('pkg-list');
+if (cache[repo]) { updateStats(repo, cache[repo]); renderPackages(); return; }
+
+list.innerHTML = `<div class="state-box"><div class="spinner"></div><span>loading ${repo} packages…</span></div>`;
+
+try {
+    const base = `repo/${repo}/x86_64/repodata/`;
+
+    // Step 1: find real primary filename from repomd.xml
+    const repomdRes = await fetch(base + 'repomd.xml');
+    if (!repomdRes.ok) throw new Error('HTTP ' + repomdRes.status);
+    const repomdDoc = new DOMParser().parseFromString(await repomdRes.text(), 'application/xml');
+    const primaryHref = [...repomdDoc.querySelectorAll('data')]
+    .find(el => el.getAttribute('type') === 'primary')
+    ?.querySelector('location')?.getAttribute('href');
+    if (!primaryHref) throw new Error('primary not found in repomd.xml');
+
+    // Step 2: fetch & decompress primary.xml.gz
+    const res = await fetch(base + primaryHref.split('/').pop());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const xml = await decompressGz(await res.arrayBuffer());
+
+    cache[repo] = parseXml(xml, repo);
+    updateStats(repo, cache[repo]);
+    renderPackages();
+} catch (err) {
+    list.innerHTML = stateBox(`failed to load packages`, `could not fetch repodata — ${err.message}`, errorIcon);
+}
+}
+
+// ── Decompress gzip ──────────────────────────────────────
+async function decompressGz(buf) {
+const ds = new DecompressionStream('gzip');
+const writer = ds.writable.getWriter();
+writer.write(new Uint8Array(buf));
+writer.close();
+const chunks = [];
+for (const reader = ds.readable.getReader();;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+}
+const out = new Uint8Array(chunks.reduce((s, c) => s + c.length, 0));
+let off = 0;
+for (const c of chunks) { out.set(c, off); off += c.length; }
+return new TextDecoder().decode(out);
+}
+
+// ── Parse primary.xml ────────────────────────────────────
+function parseXml(xml, repo) {
+const doc = new DOMParser().parseFromString(xml, 'application/xml');
+return [...doc.querySelectorAll('package[type="rpm"]')].map(el => {
+    const ver  = el.querySelector('version');
+    const loc  = el.querySelector('location')?.getAttribute('href') || '';
+    const file = loc.split('/').pop();
+    const base = REPOS[repo].releaseBase;
+    return {
+    name:    el.querySelector('name')?.textContent    || '',
+    arch:    el.querySelector('arch')?.textContent    || '',
+    version: ver ? `${ver.getAttribute('ver')}-${ver.getAttribute('rel')}` : '',
+    summary: el.querySelector('summary')?.textContent || '',
+    size:    parseInt(el.querySelector('size')?.getAttribute('package') || 0),
+    time:    parseInt(el.querySelector('time')?.getAttribute('file')    || 0),
+    dlUrl:   base
+        ? base + file
+        : `https://github.com/zodium-project/kmods-zodium/releases/latest/download/${file}`,
+    };
+}).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ── Stats ────────────────────────────────────────────────
+function updateStats(repo, pkgs) {
+$('stat-total').textContent   = pkgs.length;
+$('stat-repo').textContent    = 'zodium-' + repo;
+const newest = pkgs.reduce((m, p) => p.time > m ? p.time : m, 0);
+$('stat-updated').textContent = newest ? new Date(newest * 1000).toISOString().slice(0, 10) : '—';
+}
+
+// ── Render ───────────────────────────────────────────────
+function renderPackages() {
+const list  = $('pkg-list');
+const query = $('search-input').value.toLowerCase().trim();
+const sort  = $('sort-select').value;
+const pkgs  = cache[activeRepo];
+if (!pkgs) return;
+
+let out = pkgs.filter(p =>
+    p.name.toLowerCase().includes(query) || p.summary.toLowerCase().includes(query)
+);
+
+const sorters = { size: (a,b) => b.size - a.size, name: (a,b) => a.name.localeCompare(b.name), version: (a,b) => a.version.localeCompare(b.version) };
+if (sorters[sort]) out.sort(sorters[sort]);
+
+if (!out.length) {
+    list.innerHTML = stateBox('no packages found', `no results for "<strong>${query}</strong>"`, searchIcon);
+    return;
+}
+list.innerHTML = `<div class="download__options-packages">${out.map((p, i) => `
+    <div class="download-card" style="animation-delay:${Math.min(i*18,300)}ms">
+        <div class="download-card__content">
+            <div class="download-card__main">
+                <div class="download-card__header">
+                    <span class="download-card__name">${esc(p.name)}</span>
+                    <span class="download-card__arch ${p.arch==='noarch'?'arch-noarch':p.arch.includes('86')?'arch-x86':''}">${esc(p.arch)}</span>
+                    <span class="download-card__item">${clockIcon} ${esc(p.version)}</span>
+                    ${p.size ? `<span class="download-card__item">${dlIcon} ${fmtSize(p.size)}</span>` : ''}
+                </div>
+                ${p.summary ? `<div class="download-card__summary">${esc(p.summary)}</div>` : ''}
+            </div>
+            ${p.dlUrl ? `<a class="download-card__btn btn btn--primary btn--pill" href="${p.dlUrl}" target="_blank" rel="noopener"><span class="download-card__btn-content">${dlIcon}<span>.rpm</span></span></a>` : ''}
+        </div>
+    </div>`).join('')}</div>`;
+
+}
+
+// ── Helpers ──────────────────────────────────────────────
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtSize = b => !b ? '' : b > 1048576 ? (b/1048576).toFixed(1)+' MB' : b > 1024 ? (b/1024).toFixed(0)+' KB' : b+' B';
+const stateBox = (title, msg, icon) => `<div class="state-box">${icon}<span>${title}</span><p>${msg}</p></div>`;
+
+// SVG icons as constants to avoid repetition in templates
+const errorIcon  = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+const searchIcon = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+const clockIcon  = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6 3.5v2.5l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+const dlIcon     = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 2v6M3.5 5.5L6 8l2.5-2.5M2 10h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+// ── Boot ─────────────────────────────────────────────────
+loadRepo('pkgs');
+
+// Event listeners for search and sort
+$('search-input')?.addEventListener('input', renderPackages);
+$('sort-select')?.addEventListener('change', renderPackages);
+
+document.getElementById('nav-toggle')?.addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
 });
-
-/* ── Stars ───────────────────────────────────────────────── */
-function initStars() {
-  const canvas = document.getElementById('star-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  let W, H, stars = [];
-  const isDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const resize = () => { W = canvas.width = canvas.offsetWidth; H = canvas.height = canvas.offsetHeight; };
-  const mkStar = () => ({
-    x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.2+0.2,
-    speed: Math.random()*0.5+0.15, angle: Math.PI/4+(Math.random()-0.5)*0.4,
-    alpha: Math.random()*0.5+0.1, trail: [], trailLen: Math.floor(Math.random()*6+3),
-  });
-  const initPool = () => { stars = Array.from({ length: Math.floor((W*H)/10000) }, mkStar); };
-
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    const col = isDark() ? 'rgba(184,202,212,' : 'rgba(45,59,69,';
-    for (const s of stars) {
-      s.trail.forEach((t, i) => {
-        ctx.beginPath(); ctx.arc(t.x, t.y, s.r*0.6, 0, Math.PI*2);
-        ctx.fillStyle = col + (i/s.trail.length)*s.alpha*0.35 + ')'; ctx.fill();
-      });
-      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
-      ctx.fillStyle = col + s.alpha + ')'; ctx.fill();
-      s.trail.push({ x: s.x, y: s.y });
-      if (s.trail.length > s.trailLen) s.trail.shift();
-      s.x += Math.cos(s.angle)*s.speed;
-      s.y += Math.sin(s.angle)*s.speed;
-      if (s.x > W+10 || s.y > H+10) {
-        const ns = mkStar();
-        Math.random() < 0.5 ? (ns.x = Math.random()*W, ns.y = -5) : (ns.x = -5, ns.y = Math.random()*H);
-        Object.assign(s, ns); s.trail = [];
-      }
-    }
-    requestAnimationFrame(draw);
-  }
-  resize(); initPool(); draw();
-  new ResizeObserver(() => { resize(); initPool(); }).observe(canvas.parentElement);
-}
-
-/* ── Typed terminal ──────────────────────────────────────── */
-function runTypedAnimation() {
-  const out = document.querySelector('.typed-output');
-  const cur = document.querySelector('.term-cursor');
-  if (!out) return;
-  const lines = [
-    { text: '✓ Fetching image layers...', color: 't-teal'  },
-    { text: '✓ Verifying signatures...',  color: 't-white' },
-    { text: '✓ Staged. Reboot to apply.', color: 't-green' },
-  ];
-  let idx = 0;
-  function typeLine({ text, color }, onDone) {
-    let i = 0; out.textContent = ''; out.className = 'typed-output ' + color;
-    const iv = setInterval(() => {
-      out.textContent += text[i++];
-      if (i >= text.length) { clearInterval(iv); setTimeout(onDone, 700); }
-    }, 28);
-  }
-  function next() {
-    if (idx >= lines.length) {
-      if (cur) cur.style.display = 'none';
-      setTimeout(() => { idx = 0; if (cur) cur.style.display = 'inline-block'; out.textContent = ''; next(); }, 3200);
-      return;
-    }
-    setTimeout(() => typeLine(lines[idx], () => { idx++; next(); }), idx === 0 ? 200 : 0);
-  }
-  setTimeout(next, 1600);
-}
+document.getElementById('sidebar-overlay')?.addEventListener('click', () => {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+});
