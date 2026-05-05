@@ -598,9 +598,15 @@ code, pre, kbd, samp {
   text-align: center;
 }
 
+.download__options-packages {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-10);
+}
 .download__options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-6);
   margin-top: var(--space-10);
 }
@@ -819,6 +825,74 @@ code, pre, kbd, samp {
 .download-card:hover {
   border-color: var(--color-accent);
   box-shadow: var(--shadow-glow);
+}
+
+/* Compact card variant for packages */
+.download__options-packages .download-card {
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-2);
+}
+
+.download__options-packages .download-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.download__options-packages .download-card__name {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.download__options-packages .download-card__arch {
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.download__options-packages .download-card__item {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.download__options-packages .download-card__summary {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-snug);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.download__options-packages .download-card__btn {
+  align-self: flex-end;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.download-card__btn-content {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.download__options-packages .download-card__content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .download-card__label {

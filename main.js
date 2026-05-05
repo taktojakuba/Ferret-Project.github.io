@@ -29,7 +29,7 @@ if (cache[repo]) { updateStats(repo, cache[repo]); renderPackages(); return; }
 list.innerHTML = `<div class="state-box"><div class="spinner"></div><span>loading ${repo} packages…</span></div>`;
 
 try {
-    const base = `${repo}/x86_64/repodata/`;
+    const base = `repo/${repo}/x86_64/repodata/`;
 
     // Step 1: find real primary filename from repomd.xml
     const repomdRes = await fetch(base + 'repomd.xml');
@@ -120,22 +120,22 @@ if (!out.length) {
     list.innerHTML = stateBox('no packages found', `no results for "<strong>${query}</strong>"`, searchIcon);
     return;
 }
+list.innerHTML = `<div class="download__options-packages">${out.map((p, i) => `
+    <div class="download-card" style="animation-delay:${Math.min(i*18,300)}ms">
+        <div class="download-card__content">
+            <div class="download-card__main">
+                <div class="download-card__header">
+                    <span class="download-card__name">${esc(p.name)}</span>
+                    <span class="download-card__arch ${p.arch==='noarch'?'arch-noarch':p.arch.includes('86')?'arch-x86':''}">${esc(p.arch)}</span>
+                    <span class="download-card__item">${clockIcon} ${esc(p.version)}</span>
+                    ${p.size ? `<span class="download-card__item">${dlIcon} ${fmtSize(p.size)}</span>` : ''}
+                </div>
+                ${p.summary ? `<div class="download-card__summary">${esc(p.summary)}</div>` : ''}
+            </div>
+            ${p.dlUrl ? `<a class="download-card__btn" href="${p.dlUrl}" target="_blank" rel="noopener"><span class="download-card__btn-content">${dlIcon}<span>.rpm</span></span></a>` : ''}
+        </div>
+    </div>`).join('')}</div>`;
 
-list.innerHTML = out.map((p, i) => `
-    <div class="pkg-card" style="animation-delay:${Math.min(i*18,300)}ms">
-    <div class="pkg-main">
-        <div class="pkg-name-row">
-        <span class="pkg-name">${esc(p.name)}</span>
-        <span class="pkg-arch ${p.arch==='noarch'?'arch-noarch':p.arch.includes('86')?'arch-x86':''}">${esc(p.arch)}</span>
-        </div>
-        ${p.summary ? `<div class="pkg-summary">${esc(p.summary)}</div>` : ''}
-        <div class="pkg-meta">
-        <span class="pkg-meta-item">${clockIcon} ${esc(p.version)}</span>
-        ${p.size ? `<span class="pkg-meta-item">${dlIcon} ${fmtSize(p.size)}</span>` : ''}
-        </div>
-    </div>
-    ${p.dlUrl ? `<a class="pkg-dl-btn" href="${p.dlUrl}" target="_blank" rel="noopener">${dlIcon} .rpm</a>` : ''}
-    </div>`).join('');
 }
 
 // ── Helpers ──────────────────────────────────────────────
@@ -151,6 +151,10 @@ const dlIcon     = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none">
 
 // ── Boot ─────────────────────────────────────────────────
 loadRepo('pkgs');
+
+// Event listeners for search and sort
+$('search-input')?.addEventListener('input', renderPackages);
+$('sort-select')?.addEventListener('change', renderPackages);
 
 document.getElementById('nav-toggle')?.addEventListener('click', () => {
   document.getElementById('sidebar').classList.toggle('open');
