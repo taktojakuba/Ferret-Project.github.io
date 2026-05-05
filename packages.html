@@ -37,6 +37,11 @@
             <input type="text" id="search-input" placeholder="Search packages..." 
                 style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--color-border); background: var(--color-bg-elevated); color: var(--color-text); min-width: 280px;">
             
+            <select id="repo-select" style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--color-border); background: var(--color-bg-elevated); color: var(--color-text);">
+                <option value="pkgs">Packages</option>
+                <option value="kmods">Kernel modules</option>
+            </select>
+
             <select id="sort-select" style="padding: var(--space-2) var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--color-border); background: var(--color-bg-elevated); color: var(--color-text);">
             <option value="name">Sort by Name</option>
             <option value="size">Sort by Size</option>

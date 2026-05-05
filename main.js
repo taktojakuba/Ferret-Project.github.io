@@ -12,6 +12,8 @@ function switchRepo(repo) {
 activeRepo = repo;
 
 const search = $('search-input');
+const repoSelect = $('repo-select');
+if (repoSelect) repoSelect.value = repo;
 
 document.querySelectorAll('#nav-pkgs, #nav-kmods').forEach(t => t.classList.remove('active-nav'));
 const navItem = document.getElementById('nav-' + repo);
@@ -155,6 +157,7 @@ loadRepo('pkgs');
 // Event listeners for search and sort
 $('search-input')?.addEventListener('input', renderPackages);
 $('sort-select')?.addEventListener('change', renderPackages);
+$('repo-select')?.addEventListener('change', e => switchRepo(e.target.value));
 
 document.getElementById('nav-toggle')?.addEventListener('click', () => {
   document.getElementById('sidebar').classList.toggle('open');
