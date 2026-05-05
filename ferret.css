@@ -873,7 +873,7 @@ code, pre, kbd, samp {
 }
 
 .download__options-packages .download-card__btn {
-  align-self: flex-end;
+  align-self: center;
   padding: var(--space-1) var(--space-2);
   font-size: var(--font-size-xs);
   border-radius: var(--radius-sm);
@@ -890,7 +890,7 @@ code, pre, kbd, samp {
 
 .download__options-packages .download-card__content {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
 }
